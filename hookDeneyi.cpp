@@ -3,78 +3,89 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <vector>
 using namespace std;
-BOOL WINAPI hooked_WriteFile(HWND   hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT   uType);
-typedef int (WINAPI * orjinalMesajAlan)(HWND   hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT   uType);
-LPVOID orjinalKodAlloc = {};
-int bit;
-int main() {
-    HINSTANCE library = LoadLibraryA("user32.dll");
-    FARPROC  orjinalKod = GetProcAddress(library, "MessageBoxA");
-    if (NULL == orjinalKod) {
-        cout << GetLastError();
-        return -1;
-    }
-    unsigned char* chr_orjinalKod = (unsigned char*)orjinalKod;
-    unsigned char opCode;
-    for (bit = 0; bit < 100; bit++) {
-        cout<< bit<<". " << hex << (int)chr_orjinalKod[bit] << endl;
-        opCode = (int)chr_orjinalKod[bit];
-        if (opCode == 0xc3)
-        {
-            // cout << "0xc3------------------------------------RET  64 bit"<<endl;
-            bit++;
-            break;
-        }
-        if (opCode == 0xc2)
-        {
-            //cout << "0xc2------------------------------------RET X 32bit"<<endl;
-            bit += 2;
-            break;
-        }
-    }
 
-    cout << "----------------------------------------------------------------------------------" << endl;
-    unsigned char* geciciAlan = (unsigned char*)orjinalKod;
-    
-    while (true) {
-        orjinalKodAlloc=VirtualAlloc(geciciAlan, bit, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-        if (orjinalKodAlloc != NULL)
-            break;
-        geciciAlan = (unsigned char*)geciciAlan - 0x1000;
-    }
-    cout << "new alloc:" << orjinalKodAlloc<<endl;
+#define FIRSTBYTECPY 5
+#define TRAMPOLINBYTE 40
+typedef struct _INFORMATIONABOUTHOOKEDFUNCTIONS {
+    ULONG nameAddress;
+    ULONG oriAddress;
+    ULONG hookFuncAddress;
+    VOID* tramFuncAddress;
+    VOID* tramAddress = NULL;
+    ;
+}INFORMATIONABOUTHOOKEDFUNCTIONS, * PINFORMATIONABOUTHOOKEDFUNCTIONS;
 
-    memset(orjinalKodAlloc,0x90,bit);//nop
-    memcpy(orjinalKodAlloc, orjinalKod, bit);
-    unsigned char* geciciparsel = (unsigned char*)orjinalKodAlloc;
-    int len = bit;
+vector<pair<ULONG, INFORMATIONABOUTHOOKEDFUNCTIONS>> _HOOKEDFUNCTION;
+//----------------------------------------------------------------------------------------------------------
+int HOOK_CREATE(VOID* pOriginAddress, VOID* pHookFuncAddress, VOID* tramFuncAddress) {
+    INFORMATIONABOUTHOOKEDFUNCTIONS newHookInformation = { 0 };
 
-    DWORD test_1;
-    if (VirtualProtect(orjinalKod, bit, PAGE_EXECUTE_READWRITE, &test_1) == 0) {
-        VirtualFree(orjinalKodAlloc, bit, MEM_RELEASE);
+    DWORD testValue_1 = 0;
+    testValue_1 = 0;
+    if (VirtualProtect(pOriginAddress, FIRSTBYTECPY, PAGE_EXECUTE_READWRITE, &testValue_1) == 0) {
         cout << -1;
+        VirtualFree(tramFuncAddress, FIRSTBYTECPY, MEM_RELEASE);
         return -1;
+    }     memset(pOriginAddress, 0x90, FIRSTBYTECPY);
+    *((unsigned char*)pOriginAddress) = (unsigned char)0x48;
+    *((unsigned char*)pOriginAddress + 1) = (unsigned char)0xB8;
+    *((long long int*)((unsigned char*)pOriginAddress + 2)) = (long long int)pHookFuncAddress;
+    *((unsigned short*)((unsigned char*)pOriginAddress + 10)) = 0xe0ff;
+
+    ULONG* requiredFunctionAddress = (ULONG*)pOriginAddress;
+    while (newHookInformation.tramAddress == NULL)
+    {
+        newHookInformation.tramAddress = VirtualAlloc(requiredFunctionAddress, TRAMPOLINBYTE, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        requiredFunctionAddress = requiredFunctionAddress + 0x1000;
     }
-    memset(chr_orjinalKod, 0x90, bit);
-   // unsigned char* hookFunction = (unsigned char*)hooked_WriteFile;
+    cout << "pOriginAddress:               :" << pOriginAddress << endl;
+    cout << "newHookInformation.tramAddress:" << newHookInformation.tramAddress << endl;
 
-    *chr_orjinalKod = (unsigned char)0x48;
-    *(chr_orjinalKod + 1) = (unsigned char)0xB8;
-    *((long long int*)(chr_orjinalKod + 2)) = (long long int)hooked_WriteFile;
-    *((unsigned short*)(chr_orjinalKod + 10)) = 0xe0ff;
+    ULONG* offset = (ULONG*)newHookInformation.tramAddress - (ULONG)pOriginAddress;
+    memset(newHookInformation.tramAddress, 0x90, TRAMPOLINBYTE);
+    memcpy(newHookInformation.tramAddress, pOriginAddress, FIRSTBYTECPY);
 
-    for (int i = 0; i < bit; i++) {
-        cout  << hex<<(int)chr_orjinalKod[i] << endl;
-    }
+    *((unsigned char*)newHookInformation.tramAddress + FIRSTBYTECPY) = (unsigned char)0x48;
+    *((unsigned char*)newHookInformation.tramAddress + 1 + FIRSTBYTECPY) = (unsigned char)0xB8;
+    *((long long int*)((unsigned char*)newHookInformation.tramAddress + 2 + FIRSTBYTECPY)) = (long long int)offset + FIRSTBYTECPY;
+    *((unsigned short*)((unsigned char*)newHookInformation.tramAddress + 10 + FIRSTBYTECPY)) = 0xe0ff;
+
+    tramFuncAddress = newHookInformation.tramAddress;;
+    unsigned char* deneme1 = (unsigned char*)newHookInformation.tramAddress;
+    for (int i = 0; i < TRAMPOLINBYTE; i++)
+        cout << hex << (int)deneme1[i] << endl;
 
 
+    newHookInformation.nameAddress = (ULONG)pOriginAddress;
+    newHookInformation.oriAddress = (ULONG)pOriginAddress;
+    newHookInformation.hookFuncAddress = (ULONG)pHookFuncAddress;
+    newHookInformation.tramFuncAddress = tramFuncAddress;
+    _HOOKEDFUNCTION.push_back(make_pair((ULONG)pOriginAddress, newHookInformation));
 
-    MessageBoxA(0, "meme22222222222222222222222222t", "Mesaj Başlığı", S_OK);
     return 0;
 }
-BOOL WINAPI hooked_WriteFile(HWND   hWnd,LPCSTR lpText,LPCSTR lpCaption,UINT   uType)
+//----------------------------------------------------------------------------------------------------------
+typedef int (WINAPI* TB_MessageBoxA)(HWND, LPCSTR, LPCSTR, UINT);
+TB_MessageBoxA TBMessageBoxA = NULL;
+
+int WINAPI HK_MessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType)
 {
-    cout << "Mesaj:" << lpText<<endl;
-    return true;
+    TBMessageBoxA(NULL, "TUGÇE", "asdas", MB_OK);
+    cout << "BISELER OLMAYA BASLADI" << endl;
+    return 0;
 }
+//----------------------------------------------------------------------------------------------------------
+void clear() {
+    for (int i = 0; i < _HOOKEDFUNCTION.size(); i++) {
+        //free(_HOOKEDFUNCTION.at(i).second.tramFuncAddress);
+    }
+}
+//----------------------------------------------------------------------------------------------------------
+int main() {
+    HOOK_CREATE(&MessageBoxA, &HK_MessageBoxA, &TBMessageBoxA);
+    MessageBoxA(NULL, "TUGÇE", "asdas", MB_OK);
+    clear();
+}
+//----------------------------------------------------------------------------------------------------------
