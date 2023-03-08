@@ -62,7 +62,7 @@ int WINAPI TEST(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType)
     cout << "TEST VERISI" << endl;
     return 0;
 }
-int MK_HookCreate(VOID* pOriginAddress, VOID* pHookFuncAddress,VOID* tramFuncAddress) {
+int MK_HookCreate(VOID* pOriginAddress, VOID* pHookFuncAddress, LPVOID* tramFuncAddress) {
     //LPVOID* ppOriginal = reinterpret_cast<LPVOID*>(tramFuncAddress);
     INFORMATIONABOUTHOOKEDFUNCTIONS newHookInformation = { 0 };
     ULONG* requiredFunctionAddress = (ULONG*)pOriginAddress;
@@ -79,10 +79,8 @@ int MK_HookCreate(VOID* pOriginAddress, VOID* pHookFuncAddress,VOID* tramFuncAdd
     }
     cout << "-------------------------------------" << endl;
     //---------------------------->>>>>>>>>>>>>>
-
     MK_LongJump((unsigned char*)pOriginAddress+ FIRSTBYTECPY, (unsigned char*)newHookInformation.trambolineAddress + FIRSTBYTECPY);
-    tramFuncAddress = (TB_MessageBoxA)newHookInformation.trambolineAddress;
-
+    *tramFuncAddress = (LPVOID*)newHookInformation.trambolineAddress;
     for (int i = 0; i < 20; i++) {
         cout << hex << (int)deneme9[i] << endl;
     }
@@ -113,7 +111,7 @@ void clear() {
 //----------------------------------------------------------------------------------------------------------
 
 int main() {
-    MK_HookCreate(&MessageBoxA,&HK_MessageBoxA,&TBMessageBoxA);
+    MK_HookCreate(&MessageBoxA,&HK_MessageBoxA, reinterpret_cast<LPVOID*>(&TBMessageBoxA));
     MessageBoxA(NULL, "TUGÇE", "asdas", MB_OK);
 //    return 0;
 }
