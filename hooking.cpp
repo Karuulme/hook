@@ -7,7 +7,7 @@
 using namespace std;
 
 #define FIRSTBYTECPY 5
-#define TRAMPOLINEBYTE 40
+#define TRAMPOLINEBYTE 20
 #define SHORTJUMPBYTE 15
 #define HOOKINGFUNC_MAXSIZE 15
 
@@ -22,8 +22,8 @@ typedef struct _VIRTUALJUMPPOINTS {
     TRAMBOLINEADDRESS trambolineAddress;
 }VIRTUALJUMPPOINTS, * PVIRTUALJUMPPOINTS;
 typedef struct _INFORMATIONABOUTHOOKEDFUNCTIONS {
-    ULONG oriAddress      = 0;
-    ULONG hookFuncAddress = 0;
+    VOID* oriAddress      = 0;
+    VOID* hookFuncAddress = 0;
     VIRTUALJUMPPOINTS virtualAddresses;
 }INFORMATIONABOUTHOOKEDFUNCTIONS, * PINFORMATIONABOUTHOOKEDFUNCTIONS;
 typedef  struct _HOOKEDLIST {
@@ -42,7 +42,7 @@ public:
 }HOOKEDLIST, * PHOOKEDLIST;
 void HOOKEDLIST::OneDelete(VOID* pOriginAddress){
     for (int i = 0; i < lenght; i++) {
-        if (hooks[i].oriAddress==(ULONG)pOriginAddress) {
+        if (hooks[i].oriAddress==pOriginAddress) {
             VirtualFree(get(i).virtualAddresses.shortJumpAddress.shortJumpAddress, 0, MEM_RELEASE);
             VirtualFree(get(i).virtualAddresses.trambolineAddress.trambolineAddress, 0, MEM_RELEASE);
         }
@@ -95,7 +95,10 @@ int MK_VirtualProtect(VOID* memoryAddress,SIZE_T size) {
 }
 //----------------------------------------------------------------------------------------------------------
 int MK_HookCreate(VOID* pOriginAddress, VOID* pHookFuncAddress, LPVOID* tramFuncAddress) {
-    INFORMATIONABOUTHOOKEDFUNCTIONS newHookInformation = { 0 };    
+    INFORMATIONABOUTHOOKEDFUNCTIONS newHookInformation = { 0 };
+    newHookInformation.oriAddress      = pOriginAddress;
+    newHookInformation.hookFuncAddress = pHookFuncAddress;
+
     newHookInformation.virtualAddresses.shortJumpAddress.shortJumpAddress= MK_VirtualAlloc(pOriginAddress, SHORTJUMPBYTE);
     if (newHookInformation.virtualAddresses.shortJumpAddress.shortJumpAddress ==NULL) {
         return -1;
@@ -114,6 +117,7 @@ int MK_HookCreate(VOID* pOriginAddress, VOID* pHookFuncAddress, LPVOID* tramFunc
     memset(pOriginAddress,0xE9, 1);
     memcpy((unsigned char*)pOriginAddress+1, &offset, 4);
     MK_LongJump(pHookFuncAddress, newHookInformation.virtualAddresses.shortJumpAddress.shortJumpAddress);
+    _hookedList.Add(newHookInformation);
     return 0;
  }
 //----------------------------------------------------------------------------------------------------------
@@ -125,10 +129,21 @@ int WINAPI HK_MessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType
     TBMessageBoxA(NULL, "memet", "asdas", MB_OK);
     return 0;
 }
+
+typedef int (WINAPI* TB_MessageBoxW)(HWND, LPCWSTR, LPCWSTR, UINT);
+TB_MessageBoxW TBMessageBoxW = NULL;
+
+int WINAPI HK_MessageBoxW(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType) {
+    cout << "gelen mesaj:" << lpText << endl;
+    TBMessageBoxW(NULL, L"memet WW", L"asdas", MB_OK);
+    return 0;
+}
 //----------------------------------------------------------------------------------------------------------
 int main() {
-    MK_HookCreate(&MessageBoxA,&HK_MessageBoxA,reinterpret_cast<LPVOID*>(&TBMessageBoxA));
+    MK_HookCreate(&MessageBoxA,&HK_MessageBoxA ,  reinterpret_cast<LPVOID*>(&TBMessageBoxA));
+    MK_HookCreate(&MessageBoxW, &HK_MessageBoxW, reinterpret_cast<LPVOID*>(&TBMessageBoxW));
     MessageBoxA(NULL, "berk", "asdas", MB_OK);
+    MessageBoxW(NULL, L"berk", L"asdas", MB_OK);
     return 0;
 }
 //----------------------------------------------------------------------------------------------------------
