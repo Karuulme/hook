@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <vector>
 using namespace std;
-
 #define FIRSTBYTECPY 5
 #define TRAMPOLINEBYTE 20
 #define SHORTJUMPBYTE 15
@@ -14,18 +13,22 @@ using namespace std;
 typedef struct _SHORTJUMPADDRESS {
     VOID* shortJumpAddress = NULL;
 }SHORTJUMPADDRESS, * PSHORTJUMPADDRESS;
+//----------------------------------------------------------------------------------------------------------
 typedef struct _TRAMBOLINEADDRESS {
     VOID* trambolineAddress = NULL;
 }TRAMBOLINEADDRESS, * PTRAMBOLINEADDRESS;
+//----------------------------------------------------------------------------------------------------------
 typedef struct _VIRTUALJUMPPOINTS {
     SHORTJUMPADDRESS  shortJumpAddress;
     TRAMBOLINEADDRESS trambolineAddress;
 }VIRTUALJUMPPOINTS, * PVIRTUALJUMPPOINTS;
+//----------------------------------------------------------------------------------------------------------
 typedef struct _INFORMATIONABOUTHOOKEDFUNCTIONS {
     VOID* oriAddress      = 0;
     VOID* hookFuncAddress = 0;
     VIRTUALJUMPPOINTS virtualAddresses;
 }INFORMATIONABOUTHOOKEDFUNCTIONS, * PINFORMATIONABOUTHOOKEDFUNCTIONS;
+//----------------------------------------------------------------------------------------------------------
 typedef  struct _HOOKEDLIST {
 private:
     INFORMATIONABOUTHOOKEDFUNCTIONS hooks[HOOKINGFUNC_MAXSIZE];
@@ -40,6 +43,7 @@ public:
     INFORMATIONABOUTHOOKEDFUNCTIONS get(short i);
 
 }HOOKEDLIST, * PHOOKEDLIST;
+//----------------------------------------------------------------------------------------------------------
 void HOOKEDLIST::OneDelete(VOID* pOriginAddress){
     for (int i = 0; i < lenght; i++) {
         if (hooks[i].oriAddress==pOriginAddress) {
@@ -48,17 +52,20 @@ void HOOKEDLIST::OneDelete(VOID* pOriginAddress){
         }
     }        
 }
+//----------------------------------------------------------------------------------------------------------
 INFORMATIONABOUTHOOKEDFUNCTIONS HOOKEDLIST::get(short i) {
     if (i <= lenght)
         return hooks[i];
     return hooks[0];
 }
+//----------------------------------------------------------------------------------------------------------
 HOOKEDLIST::~_HOOKEDLIST() {
     for (int i = 0; i < lenght; i++) {
         VirtualFree(get(i).virtualAddresses.shortJumpAddress.shortJumpAddress,   0, MEM_RELEASE);
         VirtualFree(get(i).virtualAddresses.trambolineAddress.trambolineAddress, 0, MEM_RELEASE);
     }
 }
+//----------------------------------------------------------------------------------------------------------
 void HOOKEDLIST::Add(INFORMATIONABOUTHOOKEDFUNCTIONS informationabouthookedfunctions) {
     memcpy(&hooks[lenght], &informationabouthookedfunctions, sizeof(INFORMATIONABOUTHOOKEDFUNCTIONS));
     lenght++;
@@ -78,6 +85,7 @@ LPVOID  MK_VirtualAlloc(VOID* startAddress,SIZE_T size) {
         return NULL;
     return address;
 }
+//----------------------------------------------------------------------------------------------------------v
 VOID MK_LongJump(VOID * gotoAddress,VOID * setAddress) {
     unsigned char* uc_shortJumpAddress = (unsigned char*)setAddress;
     *uc_shortJumpAddress = (unsigned char)0x48;
@@ -123,7 +131,7 @@ int MK_HookCreate(VOID* pOriginAddress, VOID* pHookFuncAddress, LPVOID* tramFunc
 //----------------------------------------------------------------------------------------------------------
 typedef int (WINAPI* TB_MessageBoxA)(HWND, LPCSTR, LPCSTR, UINT);
 TB_MessageBoxA TBMessageBoxA = NULL;
-
+//----------------------------------------------------------------------------------------------------------
 int WINAPI HK_MessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType){
     cout << "gelen mesaj:" << lpText <<endl;
     TBMessageBoxA(NULL, "memet", "asdas", MB_OK);
@@ -132,7 +140,7 @@ int WINAPI HK_MessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType
 
 typedef int (WINAPI* TB_MessageBoxW)(HWND, LPCWSTR, LPCWSTR, UINT);
 TB_MessageBoxW TBMessageBoxW = NULL;
-
+//----------------------------------------------------------------------------------------------------------
 int WINAPI HK_MessageBoxW(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType) {
     cout << "gelen mesaj:" << lpText << endl;
     TBMessageBoxW(NULL, L"memet WW", L"asdas", MB_OK);
